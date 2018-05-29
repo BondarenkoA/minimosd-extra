@@ -513,7 +513,7 @@ static void mwii_check_mode() {
 	
 	v= (uint32_t *)pgm_read_word(&bp->v);
 
-	if(*v & msgbuf.mwii.sensorActive) osd_mode = b-1;
+	if(*v & msgbuf.mwii.flag) osd_mode = b-1;
 	
 	
 	bp++;
@@ -544,13 +544,25 @@ typedef struct {
 <------>uint16_t cycleTime;
 <------>int16_t I2CError;
 <------>uint16_t  sensorPresent;
-<------>uint32_t  sensorActive;
+<------>uint32_t  flag;
 <------>uint8_t version;
 } MW_status_t;
 */
 	//r_struct((uint8_t*)&MW_STATUS,10);
-	msgbuf.mwii.sensorActive = mwii_read_ulong(offsetof(MW_status_t, sensorActive) );
-	lflags.motor_armed = (msgbuf.mwii.sensorActive & msgbuf.mwii.mode.armed) != 0;
+	msgbuf.mwii.flag = mwii_read_ulong(offsetof(MW_status_t, flag) );
+	//lflags.motor_armed = (msgbuf.mwii.sensorActive & msgbuf.mwii.mode.armed) != 0;
+	
+	lflags.motor_armed = (msgbuf.mwii.flag & MSP_FLAG_ARMED) != 0;
+	
+	
+    if( (msgbuf.mwii.flag & MSP_FLAG_ANGLE) != 0) osd_mode = 1;//shit hardcode. osd_mode from panels.h:2042 
+	if( (msgbuf.mwii.flag & MSP_FLAG_HORIZ) != 0) osd_mode = 2;
+	if( (msgbuf.mwii.flag & MSP_FLAG_PASSTHR) != 0) osd_mode = 0;
+
+//OSD::setPanel(10,1);
+//osd_printi_2(PSTR("mode:%d-%d"), (uint16_t)osd_mode, (uint16_t)(osd_mode >> 16));
+
+	
 	break;
 
 #if 0 // only in setup
@@ -576,6 +588,8 @@ uint16_t MwRcData[8]
 //	handleRawRC();
 	mwii_read_len(chan_raw,0, sizeof(chan_raw));
 
+	osd_throttle = (uint16_t)( (chan_raw[3] - 1000) / 10);
+	
 	break;
 
     case MSP_RAW_GPS:
@@ -597,7 +611,7 @@ typedef struct {
 
 	osd_fix_type       = mwii_read_byte(offsetof(GPS_t, fix) );
 	osd_satellites_visible = mwii_read_byte(offsetof(GPS_t, numSat) );
-	gps_norm(osd_pos.lat,mwii_read_ulong(offsetof(GPS_t, latitude) ));
+    gps_norm(osd_pos.lat,mwii_read_ulong(offsetof(GPS_t, latitude) ));
 	gps_norm(osd_pos.lon,mwii_read_ulong(offsetof(GPS_t, longitude) ));
 	osd_pos.alt        = mwii_read_uint(offsetof(GPS_t, altitude) );
 	osd_groundspeed    = mwii_read_uint(offsetof(GPS_t, speed) );
@@ -619,7 +633,7 @@ typedef struct {
 */
 //	r_struct((uint8_t*)&MW_ATT,6);
 	osd_att.roll = (int16_t)mwii_read_uint(offsetof(MW_ATTITUDE_t, Angle[0]) ) / 10;  // in centidegrees, thanks pwbecker
-	osd_att.pitch  = (int16_t)mwii_read_uint(offsetof(MW_ATTITUDE_t, Angle[1]) ) / 10;
+	osd_att.pitch  = (int16_t)mwii_read_uint(offsetof(MW_ATTITUDE_t, Angle[1]) ) / -10;
 	osd_heading = mwii_read_uint(offsetof(MW_ATTITUDE_t, Heading) );
 //	mwii_read_len(&osd_att,offsetof(MW_ATTITUDE_t, Angle), sizeof(osd_att)); // opposite direction
 DBG_PRINTF("got attitude roll=%d pitch=%d head=%d\n",osd_heading, osd_att.roll, osd_att.pitch);
@@ -650,8 +664,8 @@ typedef struct {
 */
 //	r_struct((uint8_t*)&MW_ANALOG,7);
 	if(!FLAGS.useExtVbattA){
-	    osd_vbat_A              = 100u * (uint16_t)mwii_read_uint(offsetof(MW_ANALOG_t, VBat) );
-	    osd_battery_remaining_A = mwii_read_uint(offsetof(MW_ANALOG_t, pMeterSum) );
+	    osd_vbat_A = 100u * (uint16_t)mwii_read_byte(offsetof(MW_ANALOG_t, VBat) );
+		mah_used = (float)mwii_read_uint(offsetof(MW_ANALOG_t, pMeterSum) );
 	}
 	if (!FLAGS.useExtCurr)
 	    osd_curr_A = mwii_read_uint(offsetof(MW_ANALOG_t, Amperage) );
@@ -842,13 +856,15 @@ void blankserialRequest(uint8_t requestMSP)
 
 void setMspRequests() {
     msgbuf.mwii.modeMSPRequests = 
-      REQ_MSP_IDENT|
+      //REQ_MSP_IDENT|
       REQ_MSP_STATUS|
       REQ_MSP_RAW_GPS|
       REQ_MSP_COMP_GPS|
-      REQ_MSP_ATTITUDE|
-      REQ_MSP_RAW_IMU|      
-      REQ_MSP_ALTITUDE | REQ_MSP_RC | REQ_MSP_ANALOG;;
+      //REQ_MSP_ATTITUDE|
+      //REQ_MSP_RAW_IMU|      
+      REQ_MSP_ALTITUDE | 
+	  REQ_MSP_RC | 
+	  REQ_MSP_ANALOG;
 
     if(apm_mav_system == 0)
      msgbuf.mwii.modeMSPRequests |= REQ_MSP_IDENT;
@@ -875,7 +891,12 @@ void doMSPrequests(){
 
     flg = !flg;
     
-    if(flg) return; // skip half of req
+	if(flg){//Fast horizon drawing
+		 blankserialRequest(MSP_ATTITUDE);
+		 return;
+	}
+	
+    //if(flg) return; // skip half of req
 
     uint8_t MSPcmdsend=0;
 
@@ -883,7 +904,7 @@ void doMSPrequests(){
 
     if(msgbuf.mwii.queuedMSPRequests == 0)
         msgbuf.mwii.queuedMSPRequests = msgbuf.mwii.modeMSPRequests;
-
+	
     uint32_t req = msgbuf.mwii.queuedMSPRequests & -msgbuf.mwii.queuedMSPRequests;
     msgbuf.mwii.queuedMSPRequests &= ~req;
     
@@ -929,6 +950,9 @@ void doMSPrequests(){
         break;
     }
 
+	
+	
+	
     if(MSPcmdsend)
         blankserialRequest(MSPcmdsend);
 }

@@ -845,7 +845,11 @@ static inline void check_warn(point p)
 
 
 //1
-    if (lflags.gps_active && osd_fix_type < 2) // GPS был но сейчас плохой
+#if not defined(USE_MWII)
+	if (lflags.gps_active && osd_fix_type < 2) // GPS был но сейчас плохой
+#else
+	if (lflags.gps_active && osd_fix_type < 1) // MWII is 0 or 1
+#endif//not defined(USE_MWII)
         wmask |= 1; //0
  
 //2    
@@ -1101,7 +1105,12 @@ static void panCur_A(point p){
     else
         fmt=f5_2f;
 
+#ifdef USE_MWII
+    float f = filteredCurrent * 0.1; // MWII in [100ma]
+#else
     float f = filteredCurrent * 0.01;
+#endif
+ 
     osd_printf_2(fmt, f, 0x0E); // in amps
 }
 
