@@ -1,4 +1,4 @@
-#include "cleanflight.h"
+﻿#include "cleanflight.h"
 #include "cleanflight_const.h"
 #include "cleanflight_types.h"
 
@@ -614,7 +614,7 @@ typedef struct {
     gps_norm(osd_pos.lat,mwii_read_ulong(offsetof(GPS_t, latitude) ));
 	gps_norm(osd_pos.lon,mwii_read_ulong(offsetof(GPS_t, longitude) ));
 	osd_pos.alt        = mwii_read_uint(offsetof(GPS_t, altitude) );
-	osd_groundspeed    = mwii_read_uint(offsetof(GPS_t, speed) );
+	osd_groundspeed    = (float)mwii_read_uint(offsetof(GPS_t, speed) ) * 0.036;//MWII speed in m/s*100
 	osd_cog            = mwii_read_uint(offsetof(GPS_t, ground_course) );
 	break;
 

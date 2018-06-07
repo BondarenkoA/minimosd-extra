@@ -21,6 +21,8 @@
     2 - a try to compile to STM32
 */
 
+#define HARDWARE_TYPE 0
+
 #ifndef HARDWARE_TYPE
  #if defined(MCU_STM32F103C8) || defined(MCU_STM32F103CB)
   #define HARDWARE_TYPE 2 // for STM32
@@ -36,11 +38,7 @@
 
 #define STARTUP_SCREEN 0
 
-#if defined(USE_MWII)
- #define TELEMETRY_SPEED  115200 // hard-coded 
-#else
- #define TELEMETRY_SPEED  57600  // initial speed of Serial port for CT
-#endif
+#define TELEMETRY_SPEED  57600  // initial speed of Serial port for CT
 
 #define BOOTTIME         1500   // Time in milliseconds that we show boot loading bar and wait user input
 
@@ -58,7 +56,7 @@
 
 #ifndef DEBUG // don't fit
 //#define FONT_UPLOAD 1 - don't fit :(
-#define USE_SETUP 1
+//#define USE_SETUP 1
 #define AUTOBAUD 1
 #define USE_SENSORS 1
 #endif
@@ -72,7 +70,7 @@
 
 //#define USE_MAVLINK 1
 //#define USE_UAVTALK 1
-//#define USE_MWII 1
+#define USE_MWII 1
 //#define USE_LTM 1
 //#define USE_NMEA 1
 
@@ -90,8 +88,8 @@
 // оно может читать PWM по прерываниям!
 #define PWM_PIN PD3 
 
-//#define RADIOLINK_TELEM_SDA RssiPin
-//#define RADIOLINK_TELEM_SCL AmperagePin
+#define RADIOLINK_TELEM_SDA RssiPin
+#define RADIOLINK_TELEM_SCL AmperagePin
 
 //#define WALKERA_TELEM RssiPin // telemetry output
 
